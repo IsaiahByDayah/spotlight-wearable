@@ -92,6 +92,7 @@ void error(const __FlashStringHelper*err) {
  */
 
 String userID;
+String inputBuffer;
 
 
 
@@ -185,47 +186,53 @@ void loop(void)
     ble.print(inputs);
   }
   
-  String msg;
-  retrieveMsg(msg);
+  bool msgFinished = false;
+  retrieveMsg(msgFinished);
 
-  if (msg != ""){
-    Serial.println("Message Recieved!");
+  if (msgFinished){
+    Serial.print("Message Recieved: ");
     // Do Stuff
-    
-    //delay(500);
 
-    String toPi = "This is a really long string that is being sent from the arduino to the the pi.";
-    ble.print(toPi);
+    // Grab input
+    String msg;
+    msg.concat(inputBuffer);
 
-    StaticJsonBuffer<200> jsonBuffer;
+    // reset input buffer
+    inputBuffer = "";
+
+    Serial.println(msg);
+
+//    String toPi = "This is a really long string that is being sent from the arduino to the the pi.";
+//    ble.print(toPi);
+//
+//    StaticJsonBuffer<200> jsonBuffer;
   }
 }
 
-void retrieveMsg(String& msg) {
+void retrieveMsg(bool& msgFinished) {
 
-  if ( ble.available() > 0 )
-  {
-    Serial.print("Bytes available: ");
-    Serial.println(ble.available());
+  while (ble.available() > 0) {
     
-    // Set timeout for ble serial
-    // ble.setTimeout(10000);
+    char c = (char)ble.read();
 
-//    char c[4];
-//
-//    while (ble.available() > 0) {
-//      ble.readBytes(c, 4);
-//      c[4] = '\0';
-//      Serial.print("Recieved: >");
-//      Serial.print(c);
-//      Serial.println("<");
-//    }
+//    Serial.print("Char recieved: ");
+//    Serial.println(c);
 
-    // msg = ble.readStringUntil('\n');
-    msg = ble.readString();
+    if (c == '~') {
+      msgFinished = true;
 
-    // Echo received data
-    Serial.print("Recieved: ");
-    Serial.println(msg);
-  } 
+//      Serial.print("Final msg: ");
+//      Serial.println(inputBuffer);
+      
+      return;  
+    }
+    else {
+      inputBuffer.concat(c);
+    
+//      Serial.print("Current msg: ");
+//      Serial.println(inputBuffer);
+    }
+    
+  }
+  
 }
