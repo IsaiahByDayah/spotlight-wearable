@@ -12,6 +12,7 @@
  any redistribution
 *********************************************************************/
 
+#include <ArduinoJson.h>
 #include <Arduino.h>
 #include <SPI.h>
 #if not defined (_VARIANT_ARDUINO_DUE_X_) && not defined (_VARIANT_ARDUINO_ZERO_)
@@ -85,6 +86,14 @@ void error(const __FlashStringHelper*err) {
   Serial.println(err);
   while (1);
 }
+
+/*
+ * GLOBAL VARIABLES
+ */
+
+String userID;
+
+
 
 /**************************************************************************/
 /*!
@@ -175,18 +184,48 @@ void loop(void)
     // Send input data to host via Bluefruit
     ble.print(inputs);
   }
+  
+  String msg;
+  retrieveMsg(msg);
 
-  // Echo received data
-  while ( ble.available() )
-  {
-    int c = ble.read();
+  if (msg != ""){
+    Serial.println("Message Recieved!");
+    // Do Stuff
+    
+    //delay(500);
 
-    Serial.print((char)c);
+    String toPi = "This is a really long string that is being sent from the arduino to the the pi.";
+    ble.print(toPi);
 
-    // Hex output too, helps w/debugging!
-    Serial.print(" [0x");
-    if (c <= 0xF) Serial.print(F("0"));
-    Serial.print(c, HEX);
-    Serial.print("] ");
+    StaticJsonBuffer<200> jsonBuffer;
   }
+}
+
+void retrieveMsg(String& msg) {
+
+  if ( ble.available() > 0 )
+  {
+    Serial.print("Bytes available: ");
+    Serial.println(ble.available());
+    
+    // Set timeout for ble serial
+    // ble.setTimeout(10000);
+
+//    char c[4];
+//
+//    while (ble.available() > 0) {
+//      ble.readBytes(c, 4);
+//      c[4] = '\0';
+//      Serial.print("Recieved: >");
+//      Serial.print(c);
+//      Serial.println("<");
+//    }
+
+    // msg = ble.readStringUntil('\n');
+    msg = ble.readString();
+
+    // Echo received data
+    Serial.print("Recieved: ");
+    Serial.println(msg);
+  } 
 }
