@@ -91,8 +91,12 @@ void error(const __FlashStringHelper*err) {
  * GLOBAL VARIABLES
  */
 
-String userID;
+char messageTerminatorChar = '~';
+String messageTerminatorString = "~";
+
+String userID = "abc123";
 String inputBuffer;
+int signalStrength;
 
 
 
@@ -174,6 +178,7 @@ void loop(void)
   // Check for user input
   char n, inputs[BUFSIZE+1];
 
+  // For sending straight messages across
   if (Serial.available())
   {
     n = Serial.readBytes(inputs, BUFSIZE);
@@ -185,28 +190,74 @@ void loop(void)
     // Send input data to host via Bluefruit
     ble.print(inputs);
   }
-  
+
+  // Check for any new messages
   bool msgFinished = false;
   retrieveMsg(msgFinished);
 
   if (msgFinished){
-    Serial.print("Message Recieved: ");
-    // Do Stuff
+    handleMessage();
+  }
 
-    // Grab input
-    String msg;
-    msg.concat(inputBuffer);
+  // Update LED ring
+  updateLEDRing();
 
-    // reset input buffer
-    inputBuffer = "";
+  // MARK: Check for single click and call sendLike()
 
-    Serial.println(msg);
+  // MARK: Check for double click and call sendDismiss()
+}
+
+// Parse message
+void handleMessage() {
+  Serial.print("Message Recieved: ");
+  // Do Stuff
+
+  // Grab input
+  String msg;
+  msg.concat(inputBuffer);
+
+  // reset input buffer
+  inputBuffer = "";
+
+  Serial.println(msg);
 
 //    String toPi = "This is a really long string that is being sent from the arduino to the the pi.";
-//    ble.print(toPi);
-//
-//    StaticJsonBuffer<200> jsonBuffer;
+//    sendMessage(toPi);
+
+  String testJsonToPi = "{\"Test\":\"Hello World\"}";
+  sendMessage(testJsonToPi);
+
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& msgRoot = jsonBuffer.parseObject(msg);
+
+  const char* msgTypeChar = msgRoot["msgType"];
+  String msgType = String(msgTypeChar);
+
+  if (msgType == "UserID") {
+    const char* requestChar = msgRoot["request"];
+    String request = String(requestChar);
+    if (request == "GET") {
+      sendUserID();
+    }
+    else if (request == "SET") {
+      const char* newUserID = msgRoot["userID"];
+      
+      userID = String(newUserID);
+    }
+    else {
+      // Unknow UserID Request  
+    }
   }
+  else if (msgType == "SignalStrength") {
+    signalStrength = (int) msgRoot["signalStrengthValue"];
+  }
+  else {
+    // Unknown msgType recieved  
+  }
+}
+
+void updateLEDRing(){
+  // TODO: Update signalstrength value / Color to LED Ring
 }
 
 void retrieveMsg(bool& msgFinished) {
@@ -232,7 +283,53 @@ void retrieveMsg(bool& msgFinished) {
 //      Serial.print("Current msg: ");
 //      Serial.println(inputBuffer);
     }
-    
   }
+}
+
+void sendMessage(String& msg) {
+  if (! msg.endsWith("~")) {
+    msg.concat("~");
+  }
+
+  ble.print(msg);
+}
+
+void sendUserID() {
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& userIDMessageRoot = jsonBuffer.createObject();
+  userIDMessageRoot["msgType"] = "UserID";
+  userIDMessageRoot["userID"] = userID;
   
+  // Build & send String message
+
+  String userIDMessage;
+  userIDMessageRoot.printTo(userIDMessage);
+
+  sendMessage(userIDMessage);  
+}
+
+void sendLike() {
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& likeMessageRoot = jsonBuffer.createObject();
+  likeMessageRoot["msgType"] = "Like";
+  
+  // Build & send String message
+
+  String likeMessage;
+  likeMessageRoot.printTo(likeMessage);
+
+  sendMessage(likeMessage);  
+}
+
+void sendDismiss() {
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& dismissMessageRoot = jsonBuffer.createObject();
+  dismissMessageRoot["msgType"] = "Dismiss";
+  
+  // Build & send String message
+
+  String dismissMessage;
+  dismissMessageRoot.printTo(dismissMessage);
+
+  sendMessage(dismissMessage);  
 }
