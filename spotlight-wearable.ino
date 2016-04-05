@@ -18,13 +18,22 @@
 #if not defined (_VARIANT_ARDUINO_DUE_X_) && not defined (_VARIANT_ARDUINO_ZERO_)
   #include <SoftwareSerial.h>
 #endif
-
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+  #include <avr/power.h>
+#endif
 #include "Adafruit_BLE.h"
 #include "Adafruit_BluefruitLE_SPI.h"
 #include "Adafruit_BluefruitLE_UART.h"
 
 #include "BluefruitConfig.h"
 
+
+
+/*
+ * NeoPixel Stuff
+ */
+ 
 /*=========================================================================
     APPLICATION SETTINGS
 
@@ -80,12 +89,25 @@ Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_
 //                             BLUEFRUIT_SPI_MOSI, BLUEFRUIT_SPI_CS,
 //                             BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
 
-
 // A small helper
 void error(const __FlashStringHelper*err) {
   Serial.println(err);
   while (1);
 }
+
+
+
+
+
+/*
+ * NeoPixel Stuff
+ */
+#define NeoPixel_PIN 6
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
+
+
+
 
 /*
  * GLOBAL VARIABLES
@@ -96,7 +118,8 @@ String messageTerminatorString = "~";
 
 String userID = "abc123";
 String inputBuffer;
-int signalStrength;
+int signalStrength = 0;
+int prevSignalStrength = 0;
 
 
 
@@ -145,6 +168,17 @@ void setup(void)
   Serial.println();
 
   ble.verbose(false);  // debug info is a little annoying after this point!
+
+  // This is for Trinket 5V 16MHz, you can remove these three lines if you are not using a Trinket
+  #if defined (__AVR_ATtiny85__)
+    if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
+  #endif
+  // End of trinket special code
+
+
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+  proximityLignt(2);
 
   /* Wait for connection */
   while (! ble.isConnected()) {
@@ -258,6 +292,9 @@ void handleMessage() {
 
 void updateLEDRing(){
   // TODO: Update signalstrength value / Color to LED Ring
+  Serial.print("Signal: ");
+  Serial.println(signalStrength);
+  proximityLignt(signalStrength);
 }
 
 void retrieveMsg(bool& msgFinished) {
@@ -332,4 +369,25 @@ void sendDismiss() {
   dismissMessageRoot.printTo(dismissMessage);
 
   sendMessage(dismissMessage);  
+}
+
+void proximityLignt(int prox){
+  if(prox==1){
+     colorWipe(strip.Color(67, 0, 0), 20); // Red
+  }
+  if(prox==2){
+    colorWipe(strip.Color( 70, 0, 56),20); // Purple
+  }
+  if(prox==3){
+    colorWipe(strip.Color(0, 0, 67), 20); // Blue
+  }
+
+  }
+// Fill the dots one after the other with a color
+void colorWipe(uint32_t c, uint8_t wait) {
+  for(uint16_t i=0; i<strip.numPixels(); i++) {
+    strip.setPixelColor(i, c);
+    strip.show();
+    delay(wait);
+  }
 }
