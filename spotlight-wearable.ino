@@ -116,7 +116,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NeoPixel_PIN, NEO_GRB + NEO_KHZ8
 char messageTerminatorChar = '~';
 String messageTerminatorString = "~";
 
-String userID = "abc123";
+String userID = "";
 String inputBuffer;
 int signalStrength = 0;
 int prevSignalStrength = 0;
@@ -178,7 +178,9 @@ void setup(void)
 
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
-  proximityLignt(2);
+
+  Serial.print("Default User ID: ");
+  Serial.println(userID);
 
   /* Wait for connection */
   while (! ble.isConnected()) {
@@ -267,23 +269,32 @@ void handleMessage() {
   const char* msgTypeChar = msgRoot["msgType"];
   String msgType = String(msgTypeChar);
 
+  Serial.println(msgType);
+
   if (msgType == "UserID") {
-    const char* requestChar = msgRoot["request"];
+    const char* requestChar = msgRoot["data"]["request"];
     String request = String(requestChar);
     if (request == "GET") {
+      Serial.println("Will send User ID");
       sendUserID();
     }
     else if (request == "SET") {
-      const char* newUserID = msgRoot["userID"];
+      const char* newUserID = msgRoot["data"]["userID"];
+
+      Serial.print("Setting new User ID: ");
+      Serial.println(newUserID);
       
       userID = String(newUserID);
+
+      Serial.println("Will send User ID");
+      sendUserID();
     }
     else {
       // Unknow UserID Request  
     }
   }
   else if (msgType == "SignalStrength") {
-    signalStrength = (int) msgRoot["signalStrengthValue"];
+    signalStrength = (int) msgRoot["data"]["signalStrengthValue"];
   }
   else {
     // Unknown msgType recieved  
@@ -292,8 +303,8 @@ void handleMessage() {
 
 void updateLEDRing(){
   // TODO: Update signalstrength value / Color to LED Ring
-  Serial.print("Signal: ");
-  Serial.println(signalStrength);
+//  Serial.print("Signal: ");
+//  Serial.println(signalStrength);
   proximityLignt(signalStrength);
 }
 
@@ -341,6 +352,9 @@ void sendUserID() {
 
   String userIDMessage;
   userIDMessageRoot.printTo(userIDMessage);
+
+  Serial.print("Sending User ID: ");
+  Serial.println(userID);
 
   sendMessage(userIDMessage);  
 }
