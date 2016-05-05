@@ -28,6 +28,9 @@
 
 #include "BluefruitConfig.h"
 
+#include <Wire.h>
+#include "Adafruit_DRV2605.h"
+
 
 
 /*
@@ -107,6 +110,7 @@ void error(const __FlashStringHelper*err) {
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
 
 
+Adafruit_DRV2605 drv;
 
 
 /*
@@ -121,6 +125,10 @@ String inputBuffer;
 int signalStrength = 0;
 int prevSignalStrength = 0;
 
+bool updateLED = false;
+
+uint8_t effect = 1;
+
 
 
 /**************************************************************************/
@@ -131,8 +139,8 @@ int prevSignalStrength = 0;
 /**************************************************************************/
 void setup(void)
 {
-  while (!Serial);  // required for Flora & Micro
-  delay(500);
+//  while (!Serial);  // required for Flora & Micro
+//  delay(500);
 
   Serial.begin(115200);
   Serial.println(F("Adafruit Bluefruit Command <-> Data Mode Example"));
@@ -176,16 +184,32 @@ void setup(void)
   // End of trinket special code
 
 
+  // LED RING
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
+  strip.setBrightness(64);
+  // setLEDColor(255, 165, 0);
+
+  // delay(1000);
+
+  // MOTOR
+  drv.begin();
+  drv.selectLibrary(1);
+  // I2C trigger by sending 'go' command 
+  // default, internal trigger when sending GO command
+  drv.setMode(DRV2605_MODE_INTTRIG);
+
+  // doHaptic(5);
+
+  powerUp();
 
   Serial.print("Default User ID: ");
   Serial.println(userID);
 
-  /* Wait for connection */
-  while (! ble.isConnected()) {
-      delay(500);
-  }
+//  /* Wait for connection */
+//  while (! ble.isConnected()) {
+//      delay(500);
+//  }
 
   Serial.println(F("******************************"));
 
@@ -227,16 +251,27 @@ void loop(void)
     ble.print(inputs);
   }
 
-  // Check for any new messages
-  bool msgFinished = false;
-  retrieveMsg(msgFinished);
+  if (ble.isConnected()) {
+    //Serial.println("Connected!");
+    
+    // Check for any new messages
+    bool msgFinished = false;
+    retrieveMsg(msgFinished);
+  
+    if (msgFinished){
+      handleMessage();
+    }
 
-  if (msgFinished){
-    handleMessage();
+    if (updateLED) {
+      // Update LED ring
+      updateLEDRing();  
+    }
   }
-
-  // Update LED ring
-  updateLEDRing();
+  else {
+    Serial.println("Not connected...");
+    setLEDColor(0, 0, 0);
+    delay(500);
+  }
 
   // MARK: Check for single click and call sendLike()
 
@@ -294,10 +329,52 @@ void handleMessage() {
     }
   }
   else if (msgType == "SignalStrength") {
-    signalStrength = (int) msgRoot["data"]["signalStrengthValue"];
+    signalStrength = (int) msgRoot["data"];
+    Serial.print("Signal Strength set to: ");
+    Serial.println(signalStrength);
+  }
+  else if (msgType == "Haptic") {
+    int times = (int) msgRoot["data"];
+    doHaptic(times);
+  }
+  else if (msgType == "UpdateLED") {
+    if ((int) msgRoot["data"] == 0) {
+      updateLED = false;  
+    }
+    else {
+      updateLED = true;
+    }
+  }
+  else if (msgType == "SetLights") {
+    int r = (int) msgRoot["data"]["color"]["R"];
+    int g = (int) msgRoot["data"]["color"]["G"];
+    int b = (int) msgRoot["data"]["color"]["B"];
+    setLEDColor(r, g, b);
   }
   else {
     // Unknown msgType recieved  
+  }
+}
+
+void doHaptic(int times) {
+  Serial.print("Performing haptic ");
+  Serial.print(signalStrength);
+  Serial.println(" times...");
+
+  while (times > 0) {
+    // set the effect to play
+    drv.setWaveform(0, effect);  // play effect 
+    drv.setWaveform(1, 0);       // end waveform
+  
+    // play the effect!
+    drv.go(); 
+
+    times--;
+
+    if (times != 0) {
+      // wait a bit
+      delay(500);
+    }
   }
 }
 
@@ -347,16 +424,13 @@ void sendUserID() {
   JsonObject& userIDMessageRoot = jsonBuffer.createObject();
   userIDMessageRoot["msgType"] = "UserID";
   userIDMessageRoot["userID"] = userID;
-  
-  // Build & send String message
-
-  String userIDMessage;
-  userIDMessageRoot.printTo(userIDMessage);
 
   Serial.print("Sending User ID: ");
   Serial.println(userID);
-
-  sendMessage(userIDMessage);  
+  
+  // Build & send String message
+  userIDMessageRoot.printTo(ble);
+  ble.print("~"); 
 }
 
 void sendLike() {
@@ -385,18 +459,25 @@ void sendDismiss() {
   sendMessage(dismissMessage);  
 }
 
+void setLEDColor(int r, int g, int b) {
+  colorWipe(strip.Color(r, g, b), 0);
+}
+
 void proximityLignt(int prox){
   if(prox==1){
-     colorWipe(strip.Color(67, 0, 0), 20); // Red
+     colorWipe(strip.Color(255, 0, 0), 0); // Red
   }
-  if(prox==2){
-    colorWipe(strip.Color( 70, 0, 56),20); // Purple
+  else if(prox==2){
+    colorWipe(strip.Color( 255, 0, 255), 0); // Purple
   }
-  if(prox==3){
-    colorWipe(strip.Color(0, 0, 67), 20); // Blue
+  else if(prox==3){
+    colorWipe(strip.Color(0, 0, 255), 0); // Blue
   }
+  else {
+    colorWipe(strip.Color(0, 0, 0), 0); // Black
+  }
+}
 
-  }
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
   for(uint16_t i=0; i<strip.numPixels(); i++) {
@@ -404,4 +485,19 @@ void colorWipe(uint32_t c, uint8_t wait) {
     strip.show();
     delay(wait);
   }
+}
+
+void powerUp() {
+  colorWipe(strip.Color(255, 255, 255), 50);
+  doHaptic(2);
+//  delay(200);
+  setLEDColor(0, 0, 0);
+  delay(200);
+  setLEDColor(255, 255, 255);
+  delay(300);
+  setLEDColor(0, 0, 0);
+  delay(200);
+  setLEDColor(255, 255, 255);
+  delay(300);
+  setLEDColor(0, 0, 0);
 }
